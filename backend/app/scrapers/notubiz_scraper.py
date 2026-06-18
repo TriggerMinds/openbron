@@ -33,6 +33,19 @@ class NotubizScraper:
             meeting_date = meeting.get("date", "")
             meeting_title = meeting.get("title", "")
 
+            media_url = meeting.get("videoUrl") or meeting.get("mediaUrl") or ""
+
+            if not media_url:
+                meeting_detail_resp = self.session.get(
+                    f"{municipality_url.rstrip('/')}/api/2/meetings/{meeting_id}"
+                )
+                meeting_detail = meeting_detail_resp.json()
+                media_url = (
+                    meeting_detail.get("videoUrl")
+                    or meeting_detail.get("mediaUrl")
+                    or ""
+                )
+
             documents_response = self.session.get(
                 f"{municipality_url.rstrip('/')}/api/2/meetings/{meeting_id}/documents"
             )
@@ -47,6 +60,7 @@ class NotubizScraper:
                 documents.append({
                     "id": doc.get("id", meeting_id),
                     "pdf_url": pdf_url,
+                    "audio_url": media_url,
                     "metadata": {
                         "title": doc.get("title", meeting_title),
                         "source": "notubiz",
@@ -55,6 +69,7 @@ class NotubizScraper:
                         "organization": urlparse(municipality_url).hostname or "",
                         "type": "meeting_document",
                         "meeting_id": str(meeting_id),
+                        "media_url": media_url,
                     },
                 })
 

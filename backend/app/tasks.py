@@ -137,6 +137,77 @@ def scrape_source(self, source_type: str, source_url: str) -> list:
             return []
 
 
+@app.task(bind=True, max_retries=settings.celery_task_max_retries, acks_late=True)
+def transcribe_media(self, document_id: int, media_url: str, metadata: dict) -> dict:
+    temp_dir = tempfile.mkdtemp(prefix="openbron_transcribe_")
+    try:
+        logger.info(
+            "transcribe_media_started",
+            document_id=document_id,
+            media_url=media_url,
+        )
+
+        from app.ingestion.transcriber import AudioTranscriber
+
+        transcriber = AudioTranscriber()
+        segments = transcriber.transcribe_url(media_url, temp_dir)
+
+        if not segments:
+            logger.warning(
+                "transcribe_media_no_segments",
+                document_id=document_id,
+                media_url=media_url,
+            )
+            return {"document_id": document_id, "status": "no_audio", "segments": 0}
+
+        chunks = []
+        for idx, seg in enumerate(segments):
+            chunks.append({
+                "chunk_index": idx,
+                "page_number": 0,
+                "timestamp_start": seg["timestamp_start"],
+                "timestamp_end": seg["timestamp_end"],
+                "content": seg["text"],
+                "token_count": len(seg["text"].split()),
+                "metadata": metadata,
+            })
+
+        generate_embeddings.delay(document_id, chunks)
+
+        logger.info(
+            "transcribe_media_completed",
+            document_id=document_id,
+            segment_count=len(segments),
+        )
+
+        return {
+            "document_id": document_id,
+            "status": "transcribed",
+            "segments": len(segments),
+        }
+
+    except Exception as exc:
+        logger.error(
+            "transcribe_media_failed",
+            document_id=document_id,
+            error=str(exc),
+            attempt=self.request.retries,
+        )
+        try:
+            raise self.retry(exc=exc, countdown=2 ** self.request.retries * 60)
+        except MaxRetriesExceededError:
+            logger.error(
+                "transcribe_media_dlq",
+                document_id=document_id,
+                error=str(exc),
+                job_id=self.request.id,
+            )
+            return {"document_id": document_id, "status": "failed", "error": str(exc)}
+
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 @app.task(bind=True, max_retries=3, acks_late=True)
 def generate_embeddings(self, document_id: int, chunks: list[dict]) -> dict:
     try:

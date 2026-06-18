@@ -89,3 +89,33 @@ export async function chatQuery(message: string): Promise<ChatResponse> {
 
   return res.json();
 }
+
+export interface NetworkNode {
+  id: string;
+  name: string;
+  group: "PER" | "ORG" | "GPE";
+  docCount: number;
+}
+
+export interface NetworkLink {
+  source: string;
+  target: string;
+  weight: number;
+}
+
+export interface NetworkData {
+  nodes: NetworkNode[];
+  links: NetworkLink[];
+}
+
+export async function fetchNetworkData(): Promise<NetworkData> {
+  const res = await fetch("/api/analytics/network", {
+    headers: { "Content-Type": "application/json" },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Network data fetch failed: ${res.statusText}`);
+  }
+
+  return res.json();
+}

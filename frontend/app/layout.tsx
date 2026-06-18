@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Search, MessageSquare, Bell } from "lucide-react";
+import { Search, MessageSquare, BarChart3, Bell } from "lucide-react";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -47,6 +47,13 @@ export default function RootLayout({
                 >
                   <MessageSquare className="h-4 w-4" />
                   <span className="hidden sm:inline">Chat</span>
+                </a>
+                <a
+                  href="/analytics"
+                  className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-content-secondary transition-all duration-200 hover:bg-surface-tertiary/50 hover:text-content-primary"
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  <span className="hidden sm:inline">Analytics</span>
                 </a>
                 <a
                   href="/settings/alerts"

@@ -40,6 +40,12 @@ class IbabsScraper:
             items = items_data.get("data", items_data.get("results", []))
 
             for item in items:
+                media_url = (
+                    item.get("videoUrl")
+                    or item.get("recordingUrl")
+                    or item.get("mediaUrl")
+                    or ""
+                )
                 for attachment in item.get("attachments", []):
                     pdf_url = attachment.get("url", "")
                     if not pdf_url.lower().endswith(".pdf"):
@@ -48,6 +54,7 @@ class IbabsScraper:
                     documents.append({
                         "id": attachment.get("id", agenda_id),
                         "pdf_url": pdf_url,
+                        "audio_url": media_url,
                         "metadata": {
                             "title": attachment.get("title", item.get("title", agenda_title)),
                             "source": "ibabs",
@@ -57,6 +64,7 @@ class IbabsScraper:
                             "type": "agenda_item",
                             "agenda_id": str(agenda_id),
                             "item_number": item.get("number", ""),
+                            "media_url": media_url,
                         },
                     })
 

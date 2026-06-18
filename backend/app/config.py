@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     embedding_api_key: Optional[str] = None
     embedding_endpoint: str = "https://api.openai.com/v1"
 
+    whisper_provider: str = "local"
+    whisper_model_size: str = "base"
+    whisper_api_key: Optional[str] = None
+
     tesseract_path: str = "/usr/bin/tesseract"
     opencv_threads: int = 4
 
