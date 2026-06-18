@@ -100,9 +100,9 @@ class RedactionScanner:
 
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        black_mask = cv2.inRange(gray, 0, self.black_upper[0])
+        black_mask = cv2.inRange(gray, 0, int(self.black_upper[0]))
 
-        white_mask = cv2.inRange(gray, self.white_lower[0], 255)
+        white_mask = cv2.inRange(gray, int(self.white_lower[0]), 255)
         blur = cv2.GaussianBlur(gray, (5, 5), 0)
         variance = cv2.Laplacian(blur, cv2.CV_64F)
         variance = cv2.convertScaleAbs(variance)
