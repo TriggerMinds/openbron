@@ -40,6 +40,8 @@ class VectorStore:
         max_date: Optional[str] = None,
         min_redaction: Optional[float] = None,
         max_redaction: Optional[float] = None,
+        entity_filter: Optional[list[str]] = None,
+        entity_type: Optional[str] = None,
     ) -> list[dict[str, Any]]:
         conditions = ["1=1"]
         params: dict[str, Any] = {
@@ -66,6 +68,15 @@ class VectorStore:
         if max_redaction is not None:
             conditions.append("d.redaction_ratio <= :max_redaction")
             params["max_redaction"] = max_redaction
+        if entity_filter:
+            conditions.append("d.metadata IS NOT NULL")
+            for i, name in enumerate(entity_filter):
+                key = f"entity_name_{i}"
+                conditions.append(f"d.metadata->'extracted_entities' @> :{key}::jsonb")
+                params[key] = str([{"name": name}])
+        if entity_type:
+            conditions.append("d.metadata->'extracted_entities' @> :entity_type_val::jsonb")
+            params["entity_type_val"] = str([{"type": entity_type}])
 
         where_clause = " AND ".join(conditions)
 

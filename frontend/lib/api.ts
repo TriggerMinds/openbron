@@ -8,6 +8,8 @@ interface SearchParams {
   dateTo?: string;
   minRedaction?: number;
   maxRedaction?: number;
+  entity?: string;
+  entityType?: string;
 }
 
 interface DocumentResult {
@@ -44,6 +46,8 @@ interface ChatResponse {
     page_number: number;
     quote: string;
     pdf_url: string | null;
+    chunk_index: number;
+    source: string;
   }[];
 }
 
@@ -58,6 +62,8 @@ export async function searchDocuments(params: SearchParams): Promise<SearchRespo
   if (params.dateTo) queryParams.set("dateTo", params.dateTo);
   if (params.minRedaction !== undefined) queryParams.set("minRedaction", String(params.minRedaction));
   if (params.maxRedaction !== undefined) queryParams.set("maxRedaction", String(params.maxRedaction));
+  if (params.entity) queryParams.set("entity", params.entity);
+  if (params.entityType) queryParams.set("entityType", params.entityType);
 
   const res = await fetch(`/api/search?${queryParams.toString()}`, {
     headers: { "Content-Type": "application/json" },

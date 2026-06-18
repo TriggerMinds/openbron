@@ -26,18 +26,29 @@ export default function SearchResults({ results, total, query }: SearchResultsPr
 
   if (results.length === 0) {
     return (
-      <div className="mt-8 text-center text-[var(--text-secondary)]">
-        <p className="text-lg">No results found for &quot;{query}&quot;</p>
-        <p className="mt-1 text-sm">Try adjusting your search terms or filters.</p>
+      <div className="mt-10 text-center slide-up">
+        <div className="glass-card mx-auto max-w-md rounded-2xl p-8">
+          <p className="text-lg font-medium text-content-primary">
+            No results found for &ldquo;{query}&rdquo;
+          </p>
+          <p className="mt-2 text-sm text-content-secondary">
+            Try adjusting your search terms or filters.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="mt-6">
-      <p className="mb-4 text-sm text-[var(--text-secondary)]">
-        {total} result{total !== 1 ? "s" : ""} for &quot;{query}&quot;
-      </p>
+    <div className="mt-8 slide-up">
+      <div className="mb-5 flex items-center gap-2">
+        <span className="rounded-full bg-brand-500/10 px-3 py-1 text-xs font-medium text-brand-600">
+          {total} result{total !== 1 ? "en" : ""}
+        </span>
+        <span className="text-sm text-content-secondary">
+          voor &ldquo;{query}&rdquo;
+        </span>
+      </div>
       <div className="space-y-4">
         {results.map((doc) => (
           <DocumentCard

@@ -19,16 +19,16 @@ export default function SearchInput({ onSearch, initialQuery = "" }: SearchInput
   }
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-3xl">
-      <div className="relative">
+    <form onSubmit={handleSubmit} className="w-full max-w-3xl fade-in">
+      <div className="glass-input relative rounded-2xl">
+        <Search className="absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-content-tertiary" />
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search Dutch government documents..."
-          className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] px-5 py-4 pl-14 text-lg shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+          className="w-full bg-transparent px-5 py-4 pl-14 text-lg text-content-primary placeholder-content-tertiary outline-none"
         />
-        <Search className="absolute left-4 top-1/2 h-6 w-6 -translate-y-1/2 text-[var(--text-secondary)]" />
       </div>
     </form>
   );

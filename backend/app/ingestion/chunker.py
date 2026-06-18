@@ -46,6 +46,7 @@ class DocumentChunker:
                     "content": chunk_text,
                     "token_count": len(chunk_tokens),
                     "metadata": metadata,
+                    "entities": {},
                 })
 
                 global_chunk_index += 1

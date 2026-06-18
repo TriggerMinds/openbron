@@ -22,7 +22,9 @@ class Document(Base):
     document_type = Column(String(128), nullable=True)
     summary = Column(Text, nullable=True)
     redaction_ratio = Column(Float, nullable=True, default=0.0)
-    metadata = Column(JSON, nullable=True, default=dict)
+    redaction_layout = Column(JSON, nullable=True, default=dict)
+    extracted_entities = Column(JSON, nullable=True, default=dict)
+    extra_metadata = Column("metadata", JSON, nullable=True, default=dict)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 

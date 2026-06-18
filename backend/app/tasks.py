@@ -24,17 +24,42 @@ def ingest_document(self, document_id: int, pdf_url: str, metadata: dict) -> dic
         from app.ingestion.pdf_processor import PDFProcessor
         from app.ingestion.redaction_scanner import RedactionScanner
         from app.ingestion.chunker import DocumentChunker
+        from app.ingestion.ner_service import NERService
 
         processor = PDFProcessor(temp_dir)
         pdf_path = processor.download_pdf(pdf_url, document_id)
 
         scanner = RedactionScanner()
-        redaction_ratio = scanner.scan(pdf_path)
+        scan_result = scanner.scan_with_layout(pdf_path)
 
         text_by_page = processor.extract_text(pdf_path)
 
+        ner = NERService()
+        all_entities = {"PER": [], "ORG": [], "GPE": []}
+        entities_by_page: dict[int, dict[str, list[str]]] = {}
+        for page_num in sorted(text_by_page.keys()):
+            text = text_by_page[page_num]
+            page_entities = ner.extract_entities(text)
+            entities_by_page[page_num] = page_entities
+            for label in ("PER", "ORG", "GPE"):
+                all_entities[label].extend(page_entities[label])
+
+        for label in ("PER", "ORG", "GPE"):
+            all_entities[label] = list(dict.fromkeys(all_entities[label]))
+
+        enriched_metadata = {
+            **metadata,
+            "redaction_layout": scan_result,
+            "extracted_entities": all_entities,
+        }
+
         chunker = DocumentChunker()
-        chunks = chunker.split(text_by_page, document_id, metadata)
+        chunks = chunker.split(text_by_page, document_id, enriched_metadata)
+
+        for chunk in chunks:
+            page_num = chunk["page_number"]
+            if page_num in entities_by_page:
+                chunk["entities"] = entities_by_page[page_num]
 
         generate_embeddings.delay(document_id, chunks)
 
@@ -42,11 +67,11 @@ def ingest_document(self, document_id: int, pdf_url: str, metadata: dict) -> dic
                     document_id=document_id,
                     page_count=len(text_by_page),
                     chunk_count=len(chunks),
-                    redaction_ratio=redaction_ratio)
+                    redaction_ratio=scan_result["ratio"])
 
         return {
             "document_id": document_id,
-            "redaction_ratio": redaction_ratio,
+            "redaction_ratio": scan_result["ratio"],
             "page_count": len(text_by_page),
             "chunk_count": len(chunks),
         }

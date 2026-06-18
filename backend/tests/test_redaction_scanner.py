@@ -17,20 +17,23 @@ class TestRedactionScanner:
         assert isinstance(result, float)
         assert 0.0 <= result <= 1.0
 
-    def test_analyze_page_returns_tuple(self):
-        result = self.scanner._analyze_page("nonexistent.png")
-        assert isinstance(result, tuple)
-        assert len(result) == 2
-        assert all(isinstance(v, int) for v in result)
+    def test_analyze_page_returns_dict(self):
+        result = self.scanner._analyze_page("nonexistent.png", 1)
+        assert isinstance(result, dict)
+        assert "page" in result
+        assert "redacted_pixels" in result
+        assert "total_pixels" in result
+        assert "bounding_boxes" in result
 
     def test_analyze_page_empty_image(self):
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
             img_path = f.name
 
         try:
-            redacted, total = self.scanner._analyze_page(img_path)
-            assert redacted == 0
-            assert total == 0
+            result = self.scanner._analyze_page(img_path, 1)
+            assert result["page"] == 1
+            assert result["redacted_pixels"] == 0
+            assert result["total_pixels"] == 0
         finally:
             if os.path.exists(img_path):
                 os.remove(img_path)

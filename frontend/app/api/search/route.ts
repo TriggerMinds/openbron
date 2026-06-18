@@ -27,7 +27,18 @@ export async function GET(req: NextRequest) {
     ? parseFloat(searchParams.get("maxRedaction")!)
     : undefined;
 
-  logger.info({ q, page, pageSize, source, organization, minRedaction, maxRedaction }, "search_request");
+  const rawEntities = searchParams.getAll("entity");
+  const entityType = searchParams.get("entityType") || undefined;
+
+  const entityList: string[] = [];
+  for (const e of rawEntities) {
+    for (const part of e.split(",")) {
+      const trimmed = part.trim();
+      if (trimmed) entityList.push(trimmed);
+    }
+  }
+
+  logger.info({ q, page, pageSize, source, organization, minRedaction, maxRedaction, entityList, entityType }, "search_request");
 
   try {
     const { Pool } = await import("pg");
@@ -67,6 +78,19 @@ export async function GET(req: NextRequest) {
       conditions.push(`d.redaction_ratio <= $${paramIdx}`);
       params.push(maxRedaction);
     }
+    if (entityList.length > 0) {
+      conditions.push("d.metadata IS NOT NULL");
+      for (const name of entityList) {
+        paramIdx++;
+        conditions.push(`d.metadata->'extracted_entities' @> $${paramIdx}::jsonb`);
+        params.push(JSON.stringify([{ name }]));
+      }
+    }
+    if (entityType) {
+      paramIdx++;
+      conditions.push(`d.metadata->'extracted_entities' @> $${paramIdx}::jsonb`);
+      params.push(JSON.stringify([{ type: entityType }]));
+    }
 
     const whereClause = conditions.join(" AND ");
 
@@ -86,6 +110,7 @@ export async function GET(req: NextRequest) {
           d.organization,
           d.redaction_ratio,
           d.metadata,
+          d.metadata->'extracted_entities' AS extracted_entities,
           ts_rank(
             to_tsvector('dutch', dc.content),
             plainto_tsquery('dutch', $1)

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { Sparkles } from "lucide-react";
 import SearchInput from "@/components/SearchInput";
 import SearchFilters from "@/components/SearchFilters";
 import SearchResults from "@/components/SearchResults";
@@ -68,49 +69,68 @@ export default function Home() {
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-8 text-center">
-        <h1 className="text-3xl font-bold text-[var(--text-primary)]">
-          Search Dutch Government Documents
-        </h1>
-        <p className="mt-2 text-[var(--text-secondary)]">
-          Find Woo requests, municipal agendas, council minutes, and more
-        </p>
-      </div>
+    <div className="min-h-screen">
+      <div className="gradient-hero border-b border-border/50">
+        <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+          <div className="mb-10 text-center slide-up">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full glass border-border px-4 py-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-brand-500" />
+              <span className="text-xs font-medium text-content-secondary">
+                OpenBron Premium — Alpha
+              </span>
+            </div>
+            <h1 className="text-4xl font-bold tracking-tight text-content-primary sm:text-5xl lg:text-6xl">
+              Doorzoek
+              <span className="bg-gradient-to-r from-brand-400 to-brand-600 bg-clip-text text-transparent">
+                {" "}Nederlandse{" "}
+              </span>
+              Overheidsdocumenten
+            </h1>
+            <p className="mx-auto mt-4 max-w-2xl text-lg text-content-secondary">
+              Vind Woo-verzoeken, raadsagenda&apos;s, raadsnotulen en meer — met
+              krachtige hybride zoekopdrachten en AI-gestuurde antwoorden.
+            </p>
+          </div>
 
-      <div className="flex flex-col items-center gap-6">
-        <SearchInput onSearch={handleSearch} />
-        <SearchFilters
-          source={source}
-          organization={organization}
-          dateFrom={dateFrom}
-          dateTo={dateTo}
-          minRedaction={minRedaction}
-          maxRedaction={maxRedaction}
-          onSourceChange={setSource}
-          onOrganizationChange={setOrganization}
-          onDateFromChange={setDateFrom}
-          onDateToChange={setDateTo}
-          onMinRedactionChange={setMinRedaction}
-          onMaxRedactionChange={setMaxRedaction}
-        />
-      </div>
-
-      {isLoading ? (
-        <div className="mt-8 text-center text-[var(--text-secondary)]">
-          <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
-          <p className="mt-2">Searching documents...</p>
+          <div className="flex flex-col items-center gap-6">
+            <SearchInput onSearch={handleSearch} />
+            <SearchFilters
+              source={source}
+              organization={organization}
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+              minRedaction={minRedaction}
+              maxRedaction={maxRedaction}
+              onSourceChange={setSource}
+              onOrganizationChange={setOrganization}
+              onDateFromChange={setDateFrom}
+              onDateToChange={setDateTo}
+              onMinRedactionChange={setMinRedaction}
+              onMaxRedactionChange={setMaxRedaction}
+            />
+          </div>
         </div>
-      ) : (
-        <>
-          <SearchResults results={results} total={total} query={query} />
-          <Pagination
-            currentPage={page}
-            totalPages={totalPages}
-            onPageChange={(p) => handleSearch(query, p)}
-          />
-        </>
-      )}
+      </div>
+
+      <div className="mx-auto max-w-5xl px-4 pb-16 sm:px-6 lg:px-8">
+        {isLoading ? (
+          <div className="mt-12 text-center slide-up">
+            <div className="glass-card mx-auto max-w-sm rounded-2xl p-8">
+              <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+              <p className="text-sm text-content-secondary">Documenten doorzoeken...</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <SearchResults results={results} total={total} query={query} />
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={(p) => handleSearch(query, p)}
+            />
+          </>
+        )}
+      </div>
     </div>
   );
 }

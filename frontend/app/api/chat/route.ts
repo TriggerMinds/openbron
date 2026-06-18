@@ -11,6 +11,8 @@ interface Citation {
   page_number: number;
   quote: string;
   pdf_url: string | null;
+  chunk_index: number;
+  source: string;
 }
 
 interface ChunkResult {
@@ -21,6 +23,8 @@ interface ChunkResult {
   page_number: number;
   content: string;
   combined_score: number;
+  chunk_index: number;
+  extracted_entities: unknown;
 }
 
 async function hybridSearch(query: string, limit = 15): Promise<ChunkResult[]> {
@@ -34,7 +38,9 @@ async function hybridSearch(query: string, limit = 15): Promise<ChunkResult[]> {
       d.source,
       d.pdf_url,
       dc.page_number,
+      dc.chunk_index,
       dc.content,
+      d.metadata->'extracted_entities' AS extracted_entities,
       ts_rank(
         to_tsvector('dutch', dc.content),
         plainto_tsquery('dutch', $1)
@@ -60,8 +66,10 @@ async function hybridSearch(query: string, limit = 15): Promise<ChunkResult[]> {
     source: row.source as string,
     pdf_url: row.pdf_url as string | null,
     page_number: row.page_number as number,
+    chunk_index: row.chunk_index as number,
     content: row.content as string,
     combined_score: row.score as number,
+    extracted_entities: row.extracted_entities,
   }));
 }
 
@@ -126,6 +134,8 @@ Answer in Dutch unless the user asks in another language. Be concise and precise
       page_number: c.page_number,
       quote: c.content.slice(0, 200),
       pdf_url: c.pdf_url,
+      chunk_index: c.chunk_index,
+      source: c.source,
     }));
 
     logger.info({ message, answer_length: answer.length, citation_count: citations.length }, "chat_response");
