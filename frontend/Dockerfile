@@ -18,8 +18,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-RUN addgroup --system --gid 1001 openbron && \
-    adduser --system --uid 1001 --gid 1001 openbron
+RUN apk add --no-cache tesseract-ocr && \
+    addgroup --system --gid 1001 openbron && \
+    adduser -S -u 1001 -G openbron -D openbron
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./

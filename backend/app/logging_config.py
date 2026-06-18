@@ -7,7 +7,7 @@ def configure_logging() -> None:
         processors=[
             structlog.stdlib.filter_by_level,
             structlog.stdlib.add_log_level,
-            structlog.stdlib.PositionalArgumentsFormatter,
+            structlog.stdlib.PositionalArgumentsFormatter(),
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,

@@ -14,8 +14,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-openbron}
       POSTGRES_USER: ${POSTGRES_USER:-openbron}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -36,8 +34,6 @@ services:
     <<: *shared
     image: redis:7-alpine
     container_name: openbron-redis
-    ports:
-      - "6379:6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -132,7 +128,7 @@ services:
       dockerfile: Dockerfile
     container_name: openbron-nextjs
     ports:
-      - "3000:3000"
+      - "3080:3000"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-openbron}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-openbron}
       REDIS_URL: redis://redis:6379/0
@@ -142,10 +138,6 @@ services:
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       NODE_ENV: production
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
     depends_on:
       db:
         condition: service_healthy

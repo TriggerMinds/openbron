@@ -52,7 +52,7 @@ export async function GET() {
   ]);
 
   const checks = { postgres, redis, tesseract };
-  const allHealthy = Object.values(checks).every((v) => v === true);
+  const allHealthy = postgres === true && redis === true && typeof tesseract === "string" && tesseract.startsWith("available");
 
   logger.info({ checks, allHealthy }, "health_check");
 
