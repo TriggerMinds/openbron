@@ -1,0 +1,117 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+
+env:
+  DOCKER_REGISTRY: ghcr.io
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push nextjs image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.DOCKER_REGISTRY }}/openbron-nextjs:latest
+            ${{ env.DOCKER_REGISTRY }}/openbron-nextjs:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.DOCKER_REGISTRY }}/openbron-backend:latest
+            ${{ env.DOCKER_REGISTRY }}/openbron-backend:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-staging:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create traefik directory
+        run: mkdir -p traefik
+
+      - name: Create acme.json placeholder
+        run: echo '{}' > traefik/acme.json
+
+      - name: Copy files to staging server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "docker-compose.prod.yml,.env,traefik/acme.json"
+          target: "/opt/openbron"
+
+      - name: Set acme.json permissions on server
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            chmod 600 /opt/openbron/traefik/acme.json
+
+      - name: Deploy with Docker Compose
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /opt/openbron
+            export IMAGE_TAG=${{ env.IMAGE_TAG }}
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
+            docker image prune -af --filter "until=24h"
+
+      - name: Health check
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            for i in $(seq 1 12); do
+              if curl -sf --max-time 5 https://${{ secrets.STAGING_DOMAIN }}/api/health > /dev/null 2>&1; then
+                echo "Health check passed"
+                exit 0
+              fi
+              echo "Waiting for service... attempt $i/12"
+              sleep 10
+            done
+            echo "Health check failed after 12 attempts"
+            docker compose -f /opt/openbron/docker-compose.prod.yml logs --tail=100 traefik nextjs-app
+            exit 1

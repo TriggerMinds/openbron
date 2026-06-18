@@ -1,0 +1,149 @@
+version: "4"
+
+services:
+  openbron-db:
+    type: postgresql
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: openbron
+      POSTGRES_USER: openbron
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openbron -d openbron"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2"
+
+  openbron-redis:
+    type: redis
+    image: redis:7-alpine
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  openbron-traefik:
+    type: docker
+    image: traefik:v3.1
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-acme:/acme
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/acme/acme.json"
+    labels:
+      - "traefik.http.middlewares.ssl-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.ssl-redirect.redirectscheme.permanent=true"
+      - "traefik.http.middlewares.rate-limit.ratelimit.average=100"
+      - "traefik.http.middlewares.rate-limit.ratelimit.burst=50"
+      - "traefik.http.middlewares.secure-headers.headers.hstsmaxage=31536000"
+      - "traefik.http.middlewares.secure-headers.headers.hstsincludeSubdomains=true"
+      - "traefik.http.middlewares.secure-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.secure-headers.headers.xFrameOptions=SAMEORIGIN"
+      - "traefik.http.middlewares.gzip.compress=true"
+      - "traefik.http.middlewares.cors-headers.headers.accesscontrolallowmethods=GET,POST,PUT,PATCH,DELETE,OPTIONS"
+      - "traefik.http.middlewares.cors-headers.headers.accesscontrolalloworigin=*"
+
+  openbron-nextjs:
+    type: docker
+    image: ${DOCKER_REGISTRY:-ghcr.io}/openbron-nextjs:${IMAGE_TAG:-latest}
+    environment:
+      DATABASE_URL: postgresql://openbron:${POSTGRES_PASSWORD}@openbron-db:5432/openbron
+      REDIS_URL: redis://openbron-redis:6379/0
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o}
+      NODE_ENV: production
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nextjs.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.nextjs.entrypoints=web"
+      - "traefik.http.routers.nextjs.middlewares=ssl-redirect"
+      - "traefik.http.routers.nextjs-secure.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.nextjs-secure.entrypoints=websecure"
+      - "traefik.http.routers.nextjs-secure.tls=true"
+      - "traefik.http.routers.nextjs-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.nextjs-secure.middlewares=rate-limit,secure-headers,gzip,cors-headers"
+      - "traefik.http.services.nextjs.loadbalancer.server.port=3000"
+    depends_on:
+      - openbron-db
+      - openbron-redis
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1"
+
+  openbron-celery-worker:
+    type: docker
+    image: ${DOCKER_REGISTRY:-ghcr.io}/openbron-backend:${IMAGE_TAG:-latest}
+    command: celery -A app.tasks worker --loglevel=INFO --concurrency=${CELERY_WORKER_CONCURRENCY:-4} --max-tasks-per-child=50 --events
+    environment:
+      DATABASE_URL: postgresql+asyncpg://openbron:${POSTGRES_PASSWORD}@openbron-db:5432/openbron
+      REDIS_URL: redis://openbron-redis:6379/0
+      CELERY_BROKER_URL: redis://openbron-redis:6379/0
+      CELERY_RESULT_BACKEND: redis://openbron-redis:6379/0
+      PROXY_URL: ${PROXY_URL}
+      TESSERACT_PATH: /usr/bin/tesseract
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_FROM: ${SMTP_FROM:-noreply@openbron.local}
+    volumes:
+      - ocrdata:/tmp/ocr
+    depends_on:
+      - openbron-db
+      - openbron-redis
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "4"
+
+  openbron-celery-beat:
+    type: docker
+    image: ${DOCKER_REGISTRY:-ghcr.io}/openbron-backend:${IMAGE_TAG:-latest}
+    command: celery -A app.tasks beat --loglevel=INFO
+    environment:
+      DATABASE_URL: postgresql+asyncpg://openbron:${POSTGRES_PASSWORD}@openbron-db:5432/openbron
+      REDIS_URL: redis://openbron-redis:6379/0
+      CELERY_BROKER_URL: redis://openbron-redis:6379/0
+      CELERY_RESULT_BACKEND: redis://openbron-redis:6379/0
+    depends_on:
+      - openbron-redis
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+volumes:
+  pgdata:
+  redisdata:
+  ocrdata:
+  traefik-acme:
