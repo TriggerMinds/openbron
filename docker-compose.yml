@@ -1,0 +1,167 @@
+version: "3.8"
+
+x-shared: &shared
+  networks:
+    - openbron-net
+  restart: unless-stopped
+
+services:
+  db:
+    <<: *shared
+    image: pgvector/pgvector:pg16
+    container_name: openbron-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-openbron}
+      POSTGRES_USER: ${POSTGRES_USER:-openbron}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-openbron} -d ${POSTGRES_DB:-openbron}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+
+  redis:
+    <<: *shared
+    image: redis:7-alpine
+    container_name: openbron-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+  celery-worker:
+    <<: *shared
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: openbron-celery-worker
+    command: >
+      celery -A app.tasks worker
+      --loglevel=INFO
+      --concurrency=${CELERY_WORKER_CONCURRENCY:-4}
+      --max-tasks-per-child=50
+      --events
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-openbron}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-openbron}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      PROXY_URL: ${PROXY_URL:-socks5h://127.0.0.1:1080}
+      TESSERACT_PATH: /usr/bin/tesseract
+      OPENCV_THREADS: "4"
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@openbron.local}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+    volumes:
+      - ./backend:/app
+      - ocrdata:/tmp/ocr
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "4"
+        reservations:
+          memory: 1G
+          cpus: "1"
+
+  celery-beat:
+    <<: *shared
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: openbron-celery-beat
+    command: >
+      celery -A app.tasks beat
+      --loglevel=INFO
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-openbron}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-openbron}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+  nextjs-app:
+    <<: *shared
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: openbron-nextjs
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-openbron}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-openbron}
+      REDIS_URL: redis://redis:6379/0
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o}
+      LLM_ENDPOINT: ${LLM_ENDPOINT:-https://api.openai.com/v1}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      NODE_ENV: production
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1"
+
+volumes:
+  pgdata:
+  redisdata:
+  ocrdata:
+
+networks:
+  openbron-net:
+    driver: bridge
